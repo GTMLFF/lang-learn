@@ -1,16 +1,16 @@
-const CACHE_NAME = 'englishlearn-v6';
+const CACHE_NAME = 'englishlearn-v7';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/app.js',
-  '/js/db.js',
-  '/js/tts.js',
-  '/js/import.js',
-  '/js/flashcard.js',
-  '/js/dialogue.js',
-  '/js/settings.js',
-  '/manifest.json',
+  './',
+  './index.html',
+  './css/style.css',
+  './js/app.js',
+  './js/db.js',
+  './js/tts.js',
+  './js/import.js',
+  './js/flashcard.js',
+  './js/dialogue.js',
+  './js/settings.js',
+  './manifest.json',
   'https://unpkg.com/dexie@3/dist/dexie.min.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ];
