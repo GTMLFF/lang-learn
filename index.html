@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="description" content="EnglishLearn - 通过对话练习和闪卡学习英语">
+  <title>EnglishLearn</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- ===== Import Page ===== -->
+    <div id="page-import" class="page active">
+      <div class="page-header">
+        <h1>📥 数据导入</h1>
+      </div>
+      <div class="page-content">
+        <div class="import-section">
+          <div class="input-group">
+            <textarea id="csv-input"
+              placeholder="在此粘贴 CSV 数据...&#10;&#10;支持三种格式：&#10;A - 句子纠错（Original, Polished, Reason）&#10;B - 对话内容（Speaker, Content, Chinese）&#10;C - 词汇短语（Phrase, Pronunciation, Meaning, Usage）"
+              rows="6"></textarea>
+          </div>
+          <div id="format-badge" class="format-badge hidden">
+            <span class="badge-icon"></span>
+            <span class="badge-text"></span>
+          </div>
+          <button id="parse-btn" class="btn btn-outline">
+            <span>🔍</span> 解析数据
+          </button>
+        </div>
+
+        <div id="preview-area" class="hidden">
+          <div class="section-header">
+            <h3>📋 数据预览</h3>
+            <span id="preview-count" class="badge"></span>
+          </div>
+          <div id="preview-table-container" class="table-container"></div>
+          <button id="save-btn" class="btn btn-primary btn-block">
+            <span>💾</span> 保存到数据库
+          </button>
+        </div>
+
+        <div id="import-history" class="section">
+          <div class="section-header">
+            <h3>📜 已导入数据</h3>
+          </div>
+          <div id="history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Flashcard Page ===== -->
+    <div id="page-flashcard" class="page">
+      <div class="page-header">
+        <h1>🃏 闪卡学习</h1>
+      </div>
+      <div class="page-content">
+        <div class="deck-selector">
+          <button class="deck-tab active" data-deck="sentences">句子纠错</button>
+          <button class="deck-tab" data-deck="vocabulary">词汇短语</button>
+        </div>
+
+        <div class="stats-bar">
+          <div class="stat-item">
+            <span class="stat-value" id="stat-due">0</span>
+            <span class="stat-label">待学习</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-new">0</span>
+            <span class="stat-label">新卡片</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-mastered">0</span>
+            <span class="stat-label">已掌握</span>
+          </div>
+        </div>
+
+        <div id="card-area">
+          <div id="flashcard" class="flashcard">
+            <div class="flashcard-inner">
+              <div class="flashcard-front">
+                <div class="card-label">正面</div>
+                <div class="card-content" id="card-front-content"></div>
+              </div>
+              <div class="flashcard-back">
+                <div class="card-label">背面</div>
+                <div class="card-content" id="card-back-content"></div>
+              </div>
+            </div>
+          </div>
+          <p class="card-hint" id="card-hint">👆 点击卡片翻转</p>
+        </div>
+
+        <div id="rating-area" class="rating-area hidden">
+          <button class="rate-btn rate-again" data-rating="0">
+            <span class="rate-emoji">🔄</span>
+            <span>重来</span>
+          </button>
+          <button class="rate-btn rate-hard" data-rating="1">
+            <span class="rate-emoji">😓</span>
+            <span>困难</span>
+          </button>
+          <button class="rate-btn rate-good" data-rating="2">
+            <span class="rate-emoji">👍</span>
+            <span>良好</span>
+          </button>
+          <button class="rate-btn rate-easy" data-rating="3">
+            <span class="rate-emoji">✨</span>
+            <span>简单</span>
+          </button>
+        </div>
+
+        <div id="empty-deck" class="empty-state hidden">
+          <div class="empty-icon">🎉</div>
+          <h3>太棒了！</h3>
+          <p>今日卡片已全部学习完成</p>
+          <button id="restudy-btn" class="btn btn-primary" style="margin-top: 16px;">🔄 重新学习所有卡片</button>
+        </div>
+
+        <div id="no-cards" class="empty-state hidden">
+          <div class="empty-icon">📭</div>
+          <h3>暂无卡片</h3>
+          <p>请先在导入页面添加数据</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Dialogue Page ===== -->
+    <div id="page-dialogue" class="page">
+      <div class="page-header">
+        <h1>🎙️ 对话练习</h1>
+      </div>
+      <div class="page-content">
+        <!-- Session List View -->
+        <div id="session-list-view">
+          <div id="session-list"></div>
+          <div id="no-sessions" class="empty-state hidden">
+            <div class="empty-icon">💬</div>
+            <h3>暂无对话</h3>
+            <p>请先导入格式 B 的对话数据</p>
+          </div>
+        </div>
+
+        <!-- Dialogue Detail View -->
+        <div id="dialogue-view" class="hidden">
+          <div class="dialogue-header">
+            <button id="back-to-sessions" class="btn-back">
+              <span>‹</span> 返回
+            </button>
+            <h3 id="session-title"></h3>
+          </div>
+
+          <div id="chat-container" class="chat-container"></div>
+
+          <div id="practice-controls" class="practice-controls">
+            <div class="control-row">
+              <select id="role-select" class="select-input">
+                <option value="User">🙋 扮演 User</option>
+                <option value="Coach">👩‍🏫 扮演 Coach</option>
+              </select>
+              <button id="start-practice" class="btn btn-primary">
+                <span>▶️</span> 开始练习
+              </button>
+            </div>
+          </div>
+
+          <div id="practice-area" class="practice-area hidden">
+            <div id="current-line-display" class="current-line-display hidden">
+              <p class="expected-text" id="expected-text"></p>
+              <p class="chinese-hint" id="chinese-hint"></p>
+            </div>
+            <div id="speech-result" class="speech-result hidden">
+              <div id="speech-words"></div>
+              <div class="speech-score" id="speech-score"></div>
+            </div>
+            <div class="mic-controls">
+              <button id="mic-btn" class="mic-button" disabled>
+                <span class="mic-icon">🎙️</span>
+                <span class="mic-pulse"></span>
+              </button>
+              <p id="mic-status" class="mic-status">请先配置 API Key</p>
+            </div>
+            <div class="practice-nav">
+              <button id="replay-btn" class="btn btn-outline btn-sm">🔄 重听</button>
+              <button id="next-line-btn" class="btn btn-primary btn-sm">下一句 →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Settings Page ===== -->
+    <div id="page-settings" class="page">
+      <div class="page-header">
+        <h1>⚙️ 设置</h1>
+      </div>
+      <div class="page-content">
+        <div class="settings-group">
+          <div class="settings-group-title">🔑 Google Cloud TTS</div>
+          <div class="setting-item">
+            <label class="setting-label">API Key</label>
+            <div class="setting-control">
+              <input type="password" id="api-key-input" class="text-input" placeholder="输入你的 API Key">
+              <button id="toggle-key-visibility" class="btn-icon-sm">👁️</button>
+            </div>
+            <button id="save-api-key" class="btn btn-primary btn-sm" style="margin-top:8px;">保存 Key</button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">🗣️ 语音设置</div>
+          <div class="setting-item">
+            <label class="setting-label">语速</label>
+            <div class="setting-control range-control">
+              <input type="range" id="speech-rate" class="range-input" min="0.5" max="2" step="0.1" value="1">
+              <span id="rate-value" class="range-value">1.0x</span>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">User 语音</label>
+            <select id="user-voice" class="select-input">
+              <option value="en-US-Wavenet-D">男声 D (默认)</option>
+              <option value="en-US-Wavenet-A">男声 A</option>
+              <option value="en-US-Wavenet-B">男声 B</option>
+              <option value="en-US-Wavenet-J">男声 J</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">Coach 语音</label>
+            <select id="coach-voice" class="select-input">
+              <option value="en-US-Wavenet-F">女声 F (默认)</option>
+              <option value="en-US-Wavenet-C">女声 C</option>
+              <option value="en-US-Wavenet-E">女声 E</option>
+              <option value="en-US-Wavenet-H">女声 H</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">💾 数据管理</div>
+          <div class="setting-item">
+            <button id="export-data" class="btn btn-outline btn-block">📤 导出所有数据</button>
+          </div>
+          <div class="setting-item">
+            <button id="import-backup" class="btn btn-outline btn-block">📥 导入备份数据</button>
+            <input type="file" id="import-file" accept=".json" style="display:none">
+          </div>
+          <div class="setting-item">
+            <button id="clear-data" class="btn btn-danger btn-block">🗑️ 清空所有数据</button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">ℹ️ 关于</div>
+          <div class="about-info">
+            <p><strong>EnglishLearn</strong> v1.0</p>
+            <p class="text-muted">通过对话练习和闪卡提升英语水平</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Bottom Navigation ===== -->
+    <nav id="bottom-nav">
+      <button class="nav-item active" data-page="import">
+        <span class="nav-icon">📥</span>
+        <span class="nav-label">导入</span>
+      </button>
+      <button class="nav-item" data-page="flashcard">
+        <span class="nav-icon">🃏</span>
+        <span class="nav-label">闪卡</span>
+      </button>
+      <button class="nav-item" data-page="dialogue">
+        <span class="nav-icon">🎙️</span>
+        <span class="nav-label">对话</span>
+      </button>
+      <button class="nav-item" data-page="settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">设置</span>
+      </button>
+    </nav>
+
+    <!-- ===== Toast Notification ===== -->
+    <div id="toast" class="toast hidden">
+      <span id="toast-icon"></span>
+      <span id="toast-message"></span>
+    </div>
+
+    <!-- ===== Confirm Modal ===== -->
+    <div id="confirm-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <h3 id="modal-title"></h3>
+        <p id="modal-message"></p>
+        <div class="modal-actions">
+          <button id="modal-cancel" class="btn btn-outline">取消</button>
+          <button id="modal-confirm" class="btn btn-danger">确认</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/dexie@3/dist/dexie.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/import.js"></script>
+  <script src="js/flashcard.js"></script>
+  <script src="js/dialogue.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

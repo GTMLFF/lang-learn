@@ -1,0 +1,10 @@
+# SSL certificates (private!)
+cert.pem
+key.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
