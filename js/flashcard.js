@@ -83,16 +83,6 @@ const Flashcard = {
             relevantCards = await this._filterSentenceCards(allCards);
         }
 
-        // Stats from filtered set
-        const total = relevantCards.length;
-        const due = relevantCards.filter(p => p.nextReview <= now).length;
-        const newCards = relevantCards.filter(p => p.repetitions === 0).length;
-        const mastered = relevantCards.filter(p => p.repetitions >= 1 && p.interval >= 2).length;
-
-        document.getElementById('stat-due').textContent = due;
-        document.getElementById('stat-new').textContent = newCards;
-        document.getElementById('stat-mastered').textContent = mastered;
-
         // Topics
         const topics = await DB.getTopics();
         const topicSelect = document.getElementById('flashcard-topic-filter');
@@ -106,15 +96,25 @@ const Flashcard = {
             topicSelect.appendChild(option);
         });
 
-        // Due cards from filtered set
-        let dueCards = relevantCards.filter(p => p.nextReview <= now);
-
-        // Topic filter
+        // Topic filter — apply BEFORE stats so numbers reflect selected topic
         if (currentTopic) {
             const topicItems = await DB.getItemsByTopic(type === 'sentence' ? 'sentence' : 'vocab', currentTopic);
             const topicItemIds = new Set(topicItems.map(i => i.id));
-            dueCards = dueCards.filter(p => topicItemIds.has(p.itemId));
+            relevantCards = relevantCards.filter(p => topicItemIds.has(p.itemId));
         }
+
+        // Stats from filtered set (after topic filter)
+        const total = relevantCards.length;
+        const due = relevantCards.filter(p => p.nextReview <= now).length;
+        const newCards = relevantCards.filter(p => p.repetitions === 0).length;
+        const mastered = relevantCards.filter(p => p.repetitions >= 1 && p.interval >= 2).length;
+
+        document.getElementById('stat-due').textContent = due;
+        document.getElementById('stat-new').textContent = newCards;
+        document.getElementById('stat-mastered').textContent = mastered;
+
+        // Due cards from filtered set
+        let dueCards = relevantCards.filter(p => p.nextReview <= now);
 
         this.dueCards = dueCards;
         this.currentIndex = 0;
