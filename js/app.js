@@ -109,10 +109,23 @@ const App = {
     async registerSW() {
         if ('serviceWorker' in navigator) {
             try {
-                const reg = await navigator.serviceWorker.register('/sw.js');
-                // Force check for update
+                const reg = await navigator.serviceWorker.register('./sw.js');
+                console.log('SW registered, scope:', reg.scope);
+
+                // Detect update and force activate
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    console.log('SW update found');
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'activated') {
+                            console.log('New SW activated, reloading...');
+                            window.location.reload();
+                        }
+                    });
+                });
+
+                // Check for updates
                 reg.update();
-                console.log('Service Worker registered, scope:', reg.scope);
             } catch (err) {
                 console.warn('SW registration failed:', err);
             }
