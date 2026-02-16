@@ -50,52 +50,64 @@ const Dialogue = {
 
     // ===== Session List =====
     async loadSessions() {
-        let sessions = await DB.getDialogueSessions();
         const listEl = document.getElementById('session-list');
         const noSessions = document.getElementById('no-sessions');
 
-        // Load topics
-        const topics = await DB.getTopics();
-        const topicSelect = document.getElementById('dialogue-topic-filter');
-        const currentTopic = topicSelect.value;
+        // Ensure correct view state
+        document.getElementById('session-list-view').classList.remove('hidden');
+        document.getElementById('dialogue-view').classList.add('hidden');
 
-        // Preserve selection or default to ''
-        topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
-        topics.forEach(t => {
-            const option = document.createElement('option');
-            option.value = t;
-            option.textContent = t;
-            if (t === currentTopic) option.selected = true;
-            topicSelect.appendChild(option);
-        });
+        try {
+            let sessions = await DB.getDialogueSessions();
+            console.log('[Dialogue] Loaded sessions:', sessions.length);
 
-        // Filter by topic
-        if (currentTopic) {
-            sessions = sessions.filter(s => s.topic === currentTopic);
-        }
+            // Load topics
+            const topics = await DB.getTopics();
+            const topicSelect = document.getElementById('dialogue-topic-filter');
+            const currentTopic = topicSelect.value;
 
-        if (sessions.length === 0) {
+            // Preserve selection or default to ''
+            topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
+            topics.forEach(t => {
+                const option = document.createElement('option');
+                option.value = t;
+                option.textContent = t;
+                if (t === currentTopic) option.selected = true;
+                topicSelect.appendChild(option);
+            });
+
+            // Filter by topic
+            if (currentTopic) {
+                sessions = sessions.filter(s => s.topic === currentTopic);
+            }
+
+            if (sessions.length === 0) {
+                listEl.innerHTML = '';
+                noSessions.classList.remove('hidden');
+                return;
+            }
+
+            noSessions.classList.add('hidden');
+            listEl.innerHTML = sessions.map(s => `
+          <div class="session-card" data-id="${s.id}">
+            <div class="session-card-info">
+              <h4>${this.escapeHtml(s.title)}</h4>
+              <p>${s.lineCount} 句对话 · ${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.topic ? ' · ' + this.escapeHtml(s.topic) : ''}</p>
+            </div>
+            <span class="session-card-arrow">›</span>
+          </div>
+        `).join('');
+
+            listEl.querySelectorAll('.session-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    this.openSession(parseInt(card.dataset.id));
+                });
+            });
+        } catch (err) {
+            console.error('[Dialogue] loadSessions error:', err);
             listEl.innerHTML = '';
             noSessions.classList.remove('hidden');
-            return;
         }
-
-        noSessions.classList.add('hidden');
-        listEl.innerHTML = sessions.map(s => `
-      <div class="session-card" data-id="${s.id}">
-        <div class="session-card-info">
-          <h4>${this.escapeHtml(s.title)}</h4>
-          <p>${s.lineCount} 句对话 · ${new Date(s.createdAt).toLocaleDateString('zh-CN')}</p>
-        </div>
-        <span class="session-card-arrow">›</span>
-      </div>
-    `).join('');
-
-        listEl.querySelectorAll('.session-card').forEach(card => {
-            card.addEventListener('click', () => {
-                this.openSession(parseInt(card.dataset.id));
-            });
-        });
     },
 
     // ===== Open Session =====
