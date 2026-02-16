@@ -14,7 +14,14 @@ const Import = {
         });
 
         parseBtn.addEventListener('click', () => this.parseAndPreview());
+        parseBtn.addEventListener('click', () => this.parseAndPreview());
         saveBtn.addEventListener('click', () => this.saveData());
+
+        // Clear button
+        const clearBtn = document.getElementById('clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearInput());
+        }
 
         // Load import history
         this.loadHistory();
@@ -80,6 +87,11 @@ const Import = {
             badge.className = 'format-badge format-c';
             badge.querySelector('.badge-text').textContent = '格式 C · 词汇';
             badge.querySelector('.badge-icon').textContent = '📖';
+        } else if (firstLine.includes('natural version sentence')) {
+            this.currentFormat = 'D';
+            badge.className = 'format-badge format-a'; // Reuse style A
+            badge.querySelector('.badge-text').textContent = '格式 D · 自然表达';
+            badge.querySelector('.badge-icon').textContent = '🗣️';
         } else {
             this.currentFormat = null;
             badge.classList.add('hidden');
@@ -136,8 +148,11 @@ const Import = {
             headerLabels = ['原始句子', '润色版本', '纠正原因'];
         } else if (this.currentFormat === 'B') {
             headerLabels = ['说话人', '英文内容', '中文翻译'];
-        } else {
+        } else if (this.currentFormat === 'C') {
             headerLabels = ['英文短语', '发音', '含义', '用法'];
+        } else {
+            // Format D
+            headerLabels = ['自然表达句子'];
         }
 
         const table = document.createElement('table');
@@ -187,6 +202,8 @@ const Import = {
         }
 
         const saveBtn = document.getElementById('save-btn');
+        const topic = document.getElementById('topic-input').value.trim();
+
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<span>⏳</span> 保存中...';
 
@@ -200,7 +217,7 @@ const Import = {
                 const existingSet = new Set(existing.map(s => s.polished));
                 const newRows = this.parsedData.filter(r => !existingSet.has(r[1]));
                 skippedCount = this.parsedData.length - newRows.length;
-                if (newRows.length > 0) await DB.addSentences(newRows);
+                if (newRows.length > 0) await DB.addSentences(newRows, topic);
                 savedCount = newRows.length;
             } else if (this.currentFormat === 'B') {
                 // Dedup: check by first line content
@@ -213,7 +230,7 @@ const Import = {
                 if (isDuplicate) {
                     skippedCount = this.parsedData.length;
                 } else {
-                    await DB.addDialogueSession(this.parsedData);
+                    await DB.addDialogueSession(this.parsedData, topic);
                     savedCount = this.parsedData.length;
                 }
             } else if (this.currentFormat === 'C') {
@@ -222,7 +239,22 @@ const Import = {
                 const existingSet = new Set(existing.map(v => v.phrase));
                 const newRows = this.parsedData.filter(r => !existingSet.has(r[0]));
                 skippedCount = this.parsedData.length - newRows.length;
-                if (newRows.length > 0) await DB.addVocabulary(newRows);
+                if (newRows.length > 0) await DB.addVocabulary(newRows, topic);
+                savedCount = newRows.length;
+            } else if (this.currentFormat === 'D') {
+                // Format D: Save as sentences with empty original
+                // parsedData is [[sentence], [sentence]...]
+                // addSentences expects [original, polished, reason]
+                // So we map D rows to A format: ['', sentence, '自然表达']
+                const convertedRows = this.parsedData.map(r => ['', r[0], '自然表达']);
+
+                // Dedup
+                const existing = await DB.getSentences();
+                const existingSet = new Set(existing.map(s => s.polished));
+                const newRows = convertedRows.filter(r => !existingSet.has(r[1]));
+
+                skippedCount = convertedRows.length - newRows.length;
+                if (newRows.length > 0) await DB.addSentences(newRows, topic);
                 savedCount = newRows.length;
             }
 
@@ -236,6 +268,7 @@ const Import = {
 
             // Reset
             document.getElementById('csv-input').value = '';
+            document.getElementById('topic-input').value = ''; // Reset topic too
             document.getElementById('format-badge').classList.add('hidden');
             document.getElementById('preview-area').classList.add('hidden');
             this.parsedData = null;
@@ -333,5 +366,15 @@ const Import = {
                 });
             });
         });
+    },
+
+    clearInput() {
+        document.getElementById('csv-input').value = '';
+        document.getElementById('topic-input').value = '';
+        document.getElementById('format-badge').classList.add('hidden');
+        document.getElementById('preview-area').classList.add('hidden');
+        this.parsedData = null;
+        this.currentFormat = null;
+        App.showToast('已清空', 'success');
     }
 };

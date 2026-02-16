@@ -13,6 +13,11 @@ const Dialogue = {
             this.closeSession();
         });
 
+        // Topic filter
+        document.getElementById('dialogue-topic-filter').addEventListener('change', () => {
+            this.loadSessions();
+        });
+
         document.getElementById('start-practice').addEventListener('click', () => {
             this.startPractice();
         });
@@ -41,9 +46,29 @@ const Dialogue = {
 
     // ===== Session List =====
     async loadSessions() {
-        const sessions = await DB.getDialogueSessions();
+        let sessions = await DB.getDialogueSessions();
         const listEl = document.getElementById('session-list');
         const noSessions = document.getElementById('no-sessions');
+
+        // Load topics
+        const topics = await DB.getTopics();
+        const topicSelect = document.getElementById('dialogue-topic-filter');
+        const currentTopic = topicSelect.value;
+
+        // Preserve selection or default to ''
+        topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
+        topics.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t;
+            option.textContent = t;
+            if (t === currentTopic) option.selected = true;
+            topicSelect.appendChild(option);
+        });
+
+        // Filter by topic
+        if (currentTopic) {
+            sessions = sessions.filter(s => s.topic === currentTopic);
+        }
 
         if (sessions.length === 0) {
             listEl.innerHTML = '';

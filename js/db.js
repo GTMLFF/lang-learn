@@ -9,16 +9,25 @@ db.version(1).stores({
     cardProgress: '++id, [type+itemId], type, itemId, nextReview'
 });
 
+db.version(2).stores({
+    sentences: '++id, createdAt, topic',
+    dialogueSessions: '++id, createdAt, topic',
+    dialogueLines: '++id, sessionId, speaker, order',
+    vocabulary: '++id, createdAt, topic',
+    cardProgress: '++id, [type+itemId], type, itemId, nextReview'
+});
+
 // ===== Helper Functions =====
 
 const DB = {
     // ----- Sentences (Format A) -----
-    async addSentences(rows) {
+    async addSentences(rows, topic = '') {
         const now = new Date().toISOString();
         const items = rows.map(r => ({
             original: r[0],
             polished: r[1],
             reason: r[2],
+            topic,
             createdAt: now
         }));
         const ids = await db.sentences.bulkAdd(items, { allKeys: true });
@@ -53,7 +62,7 @@ const DB = {
     },
 
     // ----- Dialogue Sessions (Format B) -----
-    async addDialogueSession(rows) {
+    async addDialogueSession(rows, topic = '') {
         const now = new Date().toISOString();
         // Extract a title from the first content line
         const firstContent = rows[0] ? rows[0][1] : 'Untitled';
@@ -62,6 +71,7 @@ const DB = {
         const sessionId = await db.dialogueSessions.add({
             title,
             lineCount: rows.length,
+            topic,
             createdAt: now
         });
 
@@ -94,13 +104,14 @@ const DB = {
     },
 
     // ----- Vocabulary (Format C) -----
-    async addVocabulary(rows) {
+    async addVocabulary(rows, topic = '') {
         const now = new Date().toISOString();
         const items = rows.map(r => ({
             phrase: r[0],
             pronunciation: r[1],
             meaning: r[2],
             usage: r[3],
+            topic,
             createdAt: now
         }));
         const ids = await db.vocabulary.bulkAdd(items, { allKeys: true });
@@ -266,6 +277,25 @@ const DB = {
             db.vocabulary.clear(),
             db.cardProgress.clear()
         ]);
+    },
+
+    async getItemsByTopic(type, topic) {
+        if (type === 'sentence') {
+            return db.sentences.where('topic').equals(topic).toArray();
+        } else if (type === 'vocab') {
+            return db.vocabulary.where('topic').equals(topic).toArray();
+        } else if (type === 'dialogue') {
+            return db.dialogueSessions.where('topic').equals(topic).toArray();
+        }
+        return [];
+    },
+
+    async getTopics() {
+        const sTopics = await db.sentences.orderBy('topic').uniqueKeys();
+        const vTopics = await db.vocabulary.orderBy('topic').uniqueKeys();
+        const dTopics = await db.dialogueSessions.orderBy('topic').uniqueKeys();
+        const all = new Set([...sTopics, ...vTopics, ...dTopics]);
+        return Array.from(all).filter(t => t);
     }
 };
 

@@ -30,16 +30,24 @@
         <div class="import-section">
           <div class="input-group">
             <textarea id="csv-input"
-              placeholder="在此粘贴 CSV 数据...&#10;&#10;支持三种格式：&#10;A - 句子纠错（Original, Polished, Reason）&#10;B - 对话内容（Speaker, Content, Chinese）&#10;C - 词汇短语（Phrase, Pronunciation, Meaning, Usage）"
+              placeholder="在此粘贴 CSV 数据...&#10;&#10;支持四种格式：&#10;A - 句子纠错（Original, Polished, Reason）&#10;B - 对话内容（Speaker, Content, Chinese）&#10;C - 词汇短语（Phrase, Pronunciation, Meaning, Usage）&#10;D - 自然表达（Natural Version Sentence）"
               rows="6"></textarea>
+          </div>
+          <div class="input-group">
+            <input type="text" id="topic-input" placeholder="📌 输入主题（如：Day 1 - Greetings）" class="topic-input">
           </div>
           <div id="format-badge" class="format-badge hidden">
             <span class="badge-icon"></span>
             <span class="badge-text"></span>
           </div>
-          <button id="parse-btn" class="btn btn-outline">
-            <span>🔍</span> 解析数据
-          </button>
+          <div class="btn-row">
+            <button id="parse-btn" class="btn btn-outline">
+              <span>🔍</span> 解析数据
+            </button>
+            <button id="clear-btn" class="btn btn-ghost">
+              <span>🗑️</span> 清空
+            </button>
+          </div>
         </div>
 
         <div id="preview-area" class="hidden">
@@ -71,6 +79,11 @@
         <div class="deck-selector">
           <button class="deck-tab active" data-deck="sentences">句子纠错</button>
           <button class="deck-tab" data-deck="vocabulary">词汇短语</button>
+        </div>
+        <div class="topic-filter">
+          <select id="flashcard-topic-filter">
+            <option value="">📌 全部主题</option>
+          </select>
         </div>
 
         <div class="stats-bar">
@@ -148,6 +161,11 @@
       <div class="page-content">
         <!-- Session List View -->
         <div id="session-list-view">
+          <div class="topic-filter">
+            <select id="dialogue-topic-filter">
+              <option value="">📌 全部主题</option>
+            </select>
+          </div>
           <div id="session-list"></div>
           <div id="no-sessions" class="empty-state hidden">
             <div class="empty-icon">💬</div>

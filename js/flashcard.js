@@ -41,6 +41,11 @@ const Flashcard = {
             }
             this.flipCard();
         });
+
+        // Topic filter
+        document.getElementById('flashcard-topic-filter').addEventListener('change', () => {
+            this.loadDeck();
+        });
     },
 
     async onPageShow() {
@@ -56,8 +61,32 @@ const Flashcard = {
         document.getElementById('stat-new').textContent = stats.new;
         document.getElementById('stat-mastered').textContent = stats.mastered;
 
+        // Load topics
+        const topics = await DB.getTopics();
+        const topicSelect = document.getElementById('flashcard-topic-filter');
+        const currentTopic = topicSelect.value;
+
+        // Preserve selection or default to ''
+        topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
+        topics.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t;
+            option.textContent = t;
+            if (t === currentTopic) option.selected = true;
+            topicSelect.appendChild(option);
+        });
+
         // Load due cards
-        this.dueCards = await DB.getDueCards(type);
+        let dueCards = await DB.getDueCards(type);
+
+        // Filter by topic if selected
+        if (currentTopic) {
+            const topicItems = await DB.getItemsByTopic(type, currentTopic);
+            const topicItemIds = new Set(topicItems.map(i => i.id));
+            dueCards = dueCards.filter(p => topicItemIds.has(p.itemId));
+        }
+
+        this.dueCards = dueCards;
         this.currentIndex = 0;
         this.isFlipped = false;
 
@@ -116,25 +145,47 @@ const Flashcard = {
 
         if (progress.type === 'sentence') {
             const item = await DB.getSentence(progress.itemId);
+            this.currentItem = item; // Store for flip logic
             if (!item) {
                 this.currentIndex++;
                 this.showCard();
                 return;
             }
 
-            // Front: Polished sentence
-            frontContent.innerHTML = `
-        <div class="english">${this.escapeHtml(item.polished)}</div>
-        <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
-      `;
+            if (!item.original) {
+                // Format D: Natural sentence (no flip)
+                frontContent.innerHTML = `
+            <div class="english large">${this.escapeHtml(item.polished)}</div>
+            <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
+            <div class="hint-text">💡 自然表达（无需翻面）</div>
+          `;
+                backContent.innerHTML = '';
+                // Disable flip for this card type implicitly by hiding rating area until flipped?
+                // Actually we should allow "flip" to just hold the rating buttons, 
+                // but visually the user sees the same content or just the buttons.
+                // Let's keep it simple: front shows content, back is empty but buttons appear when clicked.
+                // Or better: Format D cards might just auto-show rating buttons? 
+                // The user said "don't flip".
+                // I'll make flipCard check if it's Format D and maybe just show rating buttons without rotating?
+                // For now, standard flip but back is empty is simplest implementation.
+                // Let's disable the "back" content. 
+            } else {
+                // Format A: Original -> Polished
+                // Front: Polished sentence
+                frontContent.innerHTML = `
+            <div class="english">${this.escapeHtml(item.polished)}</div>
+            <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
+          `;
 
-            // Back: Original sentence + reason
-            backContent.innerHTML = `
-        <div class="english" style="opacity:0.7;text-decoration:line-through;">${this.escapeHtml(item.original)}</div>
-        <div class="reason">💡 ${this.escapeHtml(item.reason)}</div>
-      `;
+                // Back: Original sentence + reason
+                backContent.innerHTML = `
+            <div class="english" style="opacity:0.7;text-decoration:line-through;">${this.escapeHtml(item.original)}</div>
+            <div class="reason">💡 ${this.escapeHtml(item.reason)}</div>
+          `;
+            }
         } else {
             const item = await DB.getVocab(progress.itemId);
+            this.currentItem = item;
             if (!item) {
                 this.currentIndex++;
                 this.showCard();
@@ -156,10 +207,25 @@ const Flashcard = {
         }
     },
 
-    flipCard() {
+    async flipCard() {
         if (this.dueCards.length === 0) return;
 
         const flashcardEl = document.getElementById('flashcard');
+
+        // Check for Format D (Natural Sentence) - explicitly no flip
+        if (this.currentDeck === 'sentences' && this.currentItem && !this.currentItem.original) {
+            // Just show rating buttons for Format D, no flip animation
+            if (!this.isFlipped) {
+                this.isFlipped = true;
+                document.getElementById('card-hint').classList.add('hidden');
+                document.getElementById('rating-area').classList.remove('hidden');
+            } else {
+                this.isFlipped = false;
+                document.getElementById('rating-area').classList.add('hidden');
+                document.getElementById('card-hint').classList.remove('hidden');
+            }
+            return;
+        }
 
         if (!this.isFlipped) {
             flashcardEl.classList.add('flipped');
