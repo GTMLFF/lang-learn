@@ -1,15 +1,15 @@
-const CACHE_NAME = 'englishlearn-v14';
+const CACHE_NAME = 'englishlearn-v15';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './css/style.css?v=11',
-  './js/app.js?v=11',
-  './js/db.js?v=11',
-  './js/tts.js?v=11',
-  './js/import.js?v=11',
-  './js/flashcard.js?v=11',
-  './js/dialogue.js?v=11',
-  './js/settings.js?v=11',
+  './css/style.css?v=12',
+  './js/app.js?v=12',
+  './js/db.js?v=12',
+  './js/tts.js?v=12',
+  './js/import.js?v=12',
+  './js/flashcard.js?v=12',
+  './js/dialogue.js?v=12',
+  './js/settings.js?v=12',
   './manifest.json',
   'https://unpkg.com/dexie@3/dist/dexie.min.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'

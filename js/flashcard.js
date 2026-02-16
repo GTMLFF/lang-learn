@@ -1,9 +1,10 @@
 // ===== Flashcard Module =====
 const Flashcard = {
-    currentDeck: 'sentences', // 'sentences' or 'vocabulary'
+    currentDeck: 'sentences', // 'sentences', 'natural', or 'vocabulary'
     dueCards: [],
     currentIndex: 0,
     isFlipped: false,
+    currentItem: null,
 
     init() {
         // Deck tab switching
@@ -15,7 +16,6 @@ const Flashcard = {
                 this.loadDeck();
             });
         });
-
 
         // Rating buttons
         document.querySelectorAll('.rate-btn').forEach(btn => {
@@ -52,21 +52,51 @@ const Flashcard = {
         await this.loadDeck();
     },
 
+    _getProgressType() {
+        return this.currentDeck === 'vocabulary' ? 'vocab' : 'sentence';
+    },
+
+    // Filter sentence progress cards by sub-type: Format A (has original) vs Format D (no original)
+    async _filterSentenceCards(progressCards) {
+        const filtered = [];
+        for (const p of progressCards) {
+            const item = await DB.getSentence(p.itemId);
+            if (!item) continue;
+            if (this.currentDeck === 'sentences' && item.original) {
+                filtered.push(p);
+            } else if (this.currentDeck === 'natural' && !item.original) {
+                filtered.push(p);
+            }
+        }
+        return filtered;
+    },
+
     async loadDeck() {
-        const type = this.currentDeck === 'sentences' ? 'sentence' : 'vocab';
+        const type = this._getProgressType();
+        const allCards = await db.cardProgress.where('type').equals(type).toArray();
+        const now = new Date().toISOString();
 
-        // Update stats
-        const stats = await DB.getCardStats(type);
-        document.getElementById('stat-due').textContent = stats.due;
-        document.getElementById('stat-new').textContent = stats.new;
-        document.getElementById('stat-mastered').textContent = stats.mastered;
+        let relevantCards = allCards;
 
-        // Load topics
+        // For sentence-based decks, filter by Format A vs D
+        if (type === 'sentence') {
+            relevantCards = await this._filterSentenceCards(allCards);
+        }
+
+        // Stats from filtered set
+        const total = relevantCards.length;
+        const due = relevantCards.filter(p => p.nextReview <= now).length;
+        const newCards = relevantCards.filter(p => p.repetitions === 0).length;
+        const mastered = relevantCards.filter(p => p.repetitions >= 1 && p.interval >= 2).length;
+
+        document.getElementById('stat-due').textContent = due;
+        document.getElementById('stat-new').textContent = newCards;
+        document.getElementById('stat-mastered').textContent = mastered;
+
+        // Topics
         const topics = await DB.getTopics();
         const topicSelect = document.getElementById('flashcard-topic-filter');
         const currentTopic = topicSelect.value;
-
-        // Preserve selection or default to ''
         topicSelect.innerHTML = '<option value="">全部主题</option>';
         topics.forEach(t => {
             const option = document.createElement('option');
@@ -76,12 +106,12 @@ const Flashcard = {
             topicSelect.appendChild(option);
         });
 
-        // Load due cards
-        let dueCards = await DB.getDueCards(type);
+        // Due cards from filtered set
+        let dueCards = relevantCards.filter(p => p.nextReview <= now);
 
-        // Filter by topic if selected
+        // Topic filter
         if (currentTopic) {
-            const topicItems = await DB.getItemsByTopic(type, currentTopic);
+            const topicItems = await DB.getItemsByTopic(type === 'sentence' ? 'sentence' : 'vocab', currentTopic);
             const topicItemIds = new Set(topicItems.map(i => i.id));
             dueCards = dueCards.filter(p => topicItemIds.has(p.itemId));
         }
@@ -90,7 +120,6 @@ const Flashcard = {
         this.currentIndex = 0;
         this.isFlipped = false;
 
-        // Show/hide UI elements
         const cardArea = document.getElementById('card-area');
         const ratingArea = document.getElementById('rating-area');
         const emptyDeck = document.getElementById('empty-deck');
@@ -98,7 +127,7 @@ const Flashcard = {
 
         ratingArea.classList.add('hidden');
 
-        if (stats.total === 0) {
+        if (total === 0) {
             cardArea.classList.add('hidden');
             emptyDeck.classList.add('hidden');
             noCards.classList.remove('hidden');
@@ -120,15 +149,9 @@ const Flashcard = {
 
     async showCard() {
         if (this.currentIndex >= this.dueCards.length) {
-            // All cards reviewed
             document.getElementById('card-area').classList.add('hidden');
             document.getElementById('rating-area').classList.add('hidden');
             document.getElementById('empty-deck').classList.remove('hidden');
-            // Refresh stats
-            const type = this.currentDeck === 'sentences' ? 'sentence' : 'vocab';
-            const stats = await DB.getCardStats(type);
-            document.getElementById('stat-due').textContent = stats.due;
-            document.getElementById('stat-mastered').textContent = stats.mastered;
             return;
         }
 
@@ -137,92 +160,67 @@ const Flashcard = {
         const frontContent = document.getElementById('card-front-content');
         const backContent = document.getElementById('card-back-content');
 
-        // Reset flip state
+        // Reset state
         this.isFlipped = false;
-        flashcardEl.classList.remove('flipped');
+        flashcardEl.classList.remove('flipped', 'card-auto-height');
         document.getElementById('rating-area').classList.add('hidden');
         document.getElementById('card-hint').classList.remove('hidden');
 
         if (progress.type === 'sentence') {
             const item = await DB.getSentence(progress.itemId);
-            this.currentItem = item; // Store for flip logic
-            if (!item) {
-                this.currentIndex++;
-                this.showCard();
-                return;
-            }
+            this.currentItem = item;
+            if (!item) { this.currentIndex++; this.showCard(); return; }
 
             if (!item.original) {
-                // Format D: Natural sentence (no flip)
+                // Format D: Natural expression — flexible height, no flip
+                flashcardEl.classList.add('card-auto-height');
                 frontContent.innerHTML = `
-            <div class="english large">${this.escapeHtml(item.polished)}</div>
-            <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
-            <div class="hint-text">💡 自然表达（无需翻面）</div>
-          `;
+                    <div class="english">${this.escapeHtml(item.polished)}</div>
+                    <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
+                    <div class="hint-text">💡 自然表达（无需翻面，点击任意处评分）</div>
+                `;
                 backContent.innerHTML = '';
-                // Disable flip for this card type implicitly by hiding rating area until flipped?
-                // Actually we should allow "flip" to just hold the rating buttons, 
-                // but visually the user sees the same content or just the buttons.
-                // Let's keep it simple: front shows content, back is empty but buttons appear when clicked.
-                // Or better: Format D cards might just auto-show rating buttons? 
-                // The user said "don't flip".
-                // I'll make flipCard check if it's Format D and maybe just show rating buttons without rotating?
-                // For now, standard flip but back is empty is simplest implementation.
-                // Let's disable the "back" content. 
+                document.getElementById('card-hint').classList.add('hidden');
             } else {
-                // Format A: Original -> Polished
-                // Front: Polished sentence
+                // Format A: Sentence correction
                 frontContent.innerHTML = `
-            <div class="english">${this.escapeHtml(item.polished)}</div>
-            <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
-          `;
-
-                // Back: Original sentence + reason
+                    <div class="english">${this.escapeHtml(item.polished)}</div>
+                    <button class="card-audio-btn" data-audio="${this.escapeHtml(item.polished)}">🔊</button>
+                `;
                 backContent.innerHTML = `
-            <div class="english" style="opacity:0.7;text-decoration:line-through;">${this.escapeHtml(item.original)}</div>
-            <div class="reason">💡 ${this.escapeHtml(item.reason)}</div>
-          `;
+                    <div class="english" style="opacity:0.7;text-decoration:line-through;">${this.escapeHtml(item.original)}</div>
+                    <div class="reason">💡 ${this.escapeHtml(item.reason)}</div>
+                `;
             }
         } else {
             const item = await DB.getVocab(progress.itemId);
             this.currentItem = item;
-            if (!item) {
-                this.currentIndex++;
-                this.showCard();
-                return;
-            }
+            if (!item) { this.currentIndex++; this.showCard(); return; }
 
-            // Front: phrase + pronunciation + audio
             frontContent.innerHTML = `
-        <div class="english">${this.escapeHtml(item.phrase)}</div>
-        <div class="pronunciation">${this.escapeHtml(item.pronunciation)}</div>
-        <button class="card-audio-btn" data-audio="${this.escapeHtml(item.phrase)}">🔊</button>
-      `;
-
-            // Back: meaning + usage
+                <div class="english">${this.escapeHtml(item.phrase)}</div>
+                <div class="pronunciation">${this.escapeHtml(item.pronunciation)}</div>
+                <button class="card-audio-btn" data-audio="${this.escapeHtml(item.phrase)}">🔊</button>
+            `;
             backContent.innerHTML = `
-        <div class="chinese">${this.escapeHtml(item.meaning)}</div>
-        <div class="usage">${this.escapeHtml(item.usage)}</div>
-      `;
+                <div class="chinese">${this.escapeHtml(item.meaning)}</div>
+                <div class="usage">${this.escapeHtml(item.usage)}</div>
+            `;
         }
     },
 
     async flipCard() {
         if (this.dueCards.length === 0) return;
-
         const flashcardEl = document.getElementById('flashcard');
 
-        // Check for Format D (Natural Sentence) - explicitly no flip
-        if (this.currentDeck === 'sentences' && this.currentItem && !this.currentItem.original) {
-            // Just show rating buttons for Format D, no flip animation
+        // Format D: no flip, just toggle rating
+        if (this.currentItem && !this.currentItem.original && this._getProgressType() === 'sentence') {
             if (!this.isFlipped) {
                 this.isFlipped = true;
-                document.getElementById('card-hint').classList.add('hidden');
                 document.getElementById('rating-area').classList.remove('hidden');
             } else {
                 this.isFlipped = false;
                 document.getElementById('rating-area').classList.add('hidden');
-                document.getElementById('card-hint').classList.remove('hidden');
             }
             return;
         }
@@ -243,30 +241,29 @@ const Flashcard = {
     async rateCard(rating) {
         const progress = this.dueCards[this.currentIndex];
         if (!progress) return;
-
-        // Update progress in DB
         await DB.updateCardProgress(progress.id, rating);
-
-        // Move to next card
         this.currentIndex++;
         this.showCard();
-
-        // Update ALL stats
-        await this.updateAllStats();
-    },
-
-    async updateAllStats() {
-        const type = this.currentDeck === 'sentences' ? 'sentence' : 'vocab';
-        const stats = await DB.getCardStats(type);
-        document.getElementById('stat-due').textContent = stats.due;
-        document.getElementById('stat-new').textContent = stats.new;
-        document.getElementById('stat-mastered').textContent = stats.mastered;
     },
 
     async restudyAll() {
-        const type = this.currentDeck === 'sentences' ? 'sentence' : 'vocab';
-        await DB.resetProgress(type);
-        App.showToast('已重置所有卡片，开始重新学习！');
+        const type = this._getProgressType();
+
+        if (type === 'sentence') {
+            // Only reset cards belonging to current sub-deck
+            const allCards = await db.cardProgress.where('type').equals('sentence').toArray();
+            const relevantCards = await this._filterSentenceCards(allCards);
+            const now = new Date().toISOString();
+            await Promise.all(relevantCards.map(c =>
+                db.cardProgress.update(c.id, {
+                    nextReview: now, interval: 0, repetitions: 0, easeFactor: 2.5
+                })
+            ));
+        } else {
+            await DB.resetProgress(type);
+        }
+
+        App.showToast('已重置卡片，开始重新学习！');
         await this.loadDeck();
     },
 
@@ -278,20 +275,14 @@ const Flashcard = {
     },
 
     async playCardAudio(text, btn) {
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = '⏳';
-        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
         try {
             await TTS.speak(text, 'User');
         } catch (e) {
             console.error('TTS error:', e);
             App.showToast(e.message, 'error');
         } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = '🔊';
-            }
+            if (btn) { btn.disabled = false; btn.textContent = '🔊'; }
         }
     }
 };

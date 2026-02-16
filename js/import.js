@@ -303,14 +303,27 @@ const Import = {
             DB.getVocabulary()
         ]);
 
+        // Split sentences into Format A (with original) and Format D (without original)
+        const formatA = sentences.filter(s => s.original);
+        const formatD = sentences.filter(s => !s.original);
+
         const items = [];
 
-        if (sentences.length > 0) {
+        if (formatA.length > 0) {
             items.push({
                 type: '📝 句子纠错',
-                count: sentences.length,
+                count: formatA.length,
                 format: 'A',
-                data: sentences
+                data: formatA
+            });
+        }
+
+        if (formatD.length > 0) {
+            items.push({
+                type: '🗣️ 自然表达',
+                count: formatD.length,
+                format: 'D',
+                data: formatD
             });
         }
 
@@ -361,8 +374,15 @@ const Import = {
 
                 App.showConfirm('确认删除', '确定要删除这些数据吗？此操作不可撤销。', async () => {
                     if (format === 'A') {
+                        // Only delete Format A sentences (with original)
                         const all = await DB.getSentences();
-                        await DB.deleteSentences(all.map(s => s.id));
+                        const formatAIds = all.filter(s => s.original).map(s => s.id);
+                        await DB.deleteSentences(formatAIds);
+                    } else if (format === 'D') {
+                        // Only delete Format D sentences (without original)
+                        const all = await DB.getSentences();
+                        const formatDIds = all.filter(s => !s.original).map(s => s.id);
+                        await DB.deleteSentences(formatDIds);
                     } else if (format === 'B') {
                         await DB.deleteDialogueSession(parseInt(id));
                     } else if (format === 'C') {
