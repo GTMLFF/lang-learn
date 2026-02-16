@@ -222,16 +222,24 @@ const Import = {
             } else if (this.currentFormat === 'B') {
                 // Dedup: check by first line content
                 const sessions = await DB.getDialogueSessions();
+                console.log('[Import] Existing sessions:', sessions.length);
                 const firstContent = this.parsedData[0] ? this.parsedData[0][1] : '';
+                console.log('[Import] First content:', firstContent);
+                console.log('[Import] Parsed rows:', this.parsedData.length);
                 const isDuplicate = sessions.some(s => {
                     const title = firstContent.length > 50 ? firstContent.slice(0, 50) + '...' : firstContent;
                     return s.title === title && s.lineCount === this.parsedData.length;
                 });
+                console.log('[Import] isDuplicate:', isDuplicate);
                 if (isDuplicate) {
                     skippedCount = this.parsedData.length;
                 } else {
-                    await DB.addDialogueSession(this.parsedData, topic);
+                    const sessionId = await DB.addDialogueSession(this.parsedData, topic);
+                    console.log('[Import] Saved session ID:', sessionId);
                     savedCount = this.parsedData.length;
+                    // Verify write succeeded
+                    const verify = await db.dialogueSessions.get(sessionId);
+                    console.log('[Import] Verify saved:', verify ? 'OK' : 'FAILED');
                 }
             } else if (this.currentFormat === 'C') {
                 // Dedup: check by phrase

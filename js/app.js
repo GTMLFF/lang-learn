@@ -109,8 +109,10 @@ const App = {
     async registerSW() {
         if ('serviceWorker' in navigator) {
             try {
-                await navigator.serviceWorker.register('/sw.js');
-                console.log('Service Worker registered');
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                // Force check for update
+                reg.update();
+                console.log('Service Worker registered, scope:', reg.scope);
             } catch (err) {
                 console.warn('SW registration failed:', err);
             }

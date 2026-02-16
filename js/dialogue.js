@@ -58,16 +58,28 @@ const Dialogue = {
         document.getElementById('dialogue-view').classList.add('hidden');
 
         try {
-            let sessions = await DB.getDialogueSessions();
-            console.log('[Dialogue] Loaded sessions:', sessions.length);
+            // Direct DB query to bypass any potential wrapper issues
+            let sessions = await db.dialogueSessions.toArray();
+            console.log('[Dialogue] Raw sessions from DB:', sessions.length);
+            if (sessions.length > 0) {
+                console.log('[Dialogue] Sample:', JSON.stringify(sessions[0]));
+            }
 
-            // Load topics
-            const topics = await DB.getTopics();
+            // Sort by createdAt descending
+            sessions.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+            // Load topics safely
+            let topics = [];
+            try {
+                topics = await DB.getTopics();
+            } catch (e) {
+                console.warn('[Dialogue] getTopics failed:', e);
+            }
+
             const topicSelect = document.getElementById('dialogue-topic-filter');
             const currentTopic = topicSelect.value;
 
-            // Preserve selection or default to ''
-            topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
+            topicSelect.innerHTML = '<option value="">全部主题</option>';
             topics.forEach(t => {
                 const option = document.createElement('option');
                 option.value = t;
@@ -76,9 +88,10 @@ const Dialogue = {
                 topicSelect.appendChild(option);
             });
 
-            // Filter by topic
+            // Filter by topic only if explicitly selected
             if (currentTopic) {
                 sessions = sessions.filter(s => s.topic === currentTopic);
+                console.log('[Dialogue] After topic filter:', sessions.length);
             }
 
             if (sessions.length === 0) {
@@ -103,10 +116,14 @@ const Dialogue = {
                     this.openSession(parseInt(card.dataset.id));
                 });
             });
+
+            console.log('[Dialogue] Rendered', sessions.length, 'cards');
         } catch (err) {
             console.error('[Dialogue] loadSessions error:', err);
-            listEl.innerHTML = '';
-            noSessions.classList.remove('hidden');
+            listEl.innerHTML = `<div style="padding:20px;color:#ef4444;text-align:center;">
+                <p>⚠️ 加载出错: ${err.message}</p>
+            </div>`;
+            noSessions.classList.add('hidden');
         }
     },
 

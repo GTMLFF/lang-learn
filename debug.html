@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DB Debug</title>
+<style>
+body { background: #0a0e1a; color: #f1f5f9; font-family: -apple-system, sans-serif; padding: 20px; font-size: 14px; }
+pre { background: #141828; padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 8px 0; }
+button { background: #6366f1; color: white; border: none; padding: 10px 20px; border-radius: 8px; margin: 4px; font-size: 14px; }
+h3 { margin-top: 20px; color: #6366f1; }
+.ok { color: #10b981; }
+.err { color: #ef4444; }
+</style>
+</head>
+<body>
+<h2>🔍 EnglishLearn DB 诊断</h2>
+<div id="output"></div>
+<button onclick="runDiag()">运行诊断</button>
+<button onclick="testInsert()">测试写入对话</button>
+
+<script src="https://unpkg.com/dexie@3/dist/dexie.min.js"></script>
+<script>
+const log = (msg, cls='') => {
+    document.getElementById('output').innerHTML += `<pre class="${cls}">${msg}</pre>`;
+};
+
+async function runDiag() {
+    document.getElementById('output').innerHTML = '';
+    try {
+        const db = new Dexie('EnglishLearnDB');
+        
+        // Check if DB exists
+        const exists = await Dexie.exists('EnglishLearnDB');
+        log(`数据库是否存在: ${exists}`, exists ? 'ok' : 'err');
+        
+        if (!exists) {
+            log('❌ 数据库不存在！请先在主页面导入数据。', 'err');
+            return;
+        }
+
+        // Open with same schema
+        db.version(1).stores({
+            sentences: '++id, createdAt',
+            dialogueSessions: '++id, createdAt',
+            dialogueLines: '++id, sessionId, speaker, order',
+            vocabulary: '++id, createdAt',
+            cardProgress: '++id, [type+itemId], type, itemId, nextReview'
+        });
+        db.version(2).stores({
+            sentences: '++id, createdAt, topic',
+            dialogueSessions: '++id, createdAt, topic',
+            dialogueLines: '++id, sessionId, speaker, order',
+            vocabulary: '++id, createdAt, topic',
+            cardProgress: '++id, [type+itemId], type, itemId, nextReview'
+        });
+
+        await db.open();
+        log('✅ 数据库打开成功，版本: ' + db.verno, 'ok');
+
+        // Count all tables
+        const tables = ['sentences', 'dialogueSessions', 'dialogueLines', 'vocabulary', 'cardProgress'];
+        for (const t of tables) {
+            const count = await db.table(t).count();
+            log(`📊 ${t}: ${count} 条记录`, count > 0 ? 'ok' : '');
+        }
+
+        // Show dialogue sessions detail
+        const sessions = await db.dialogueSessions.toArray();
+        log('\n=== 对话会话详情 ===');
+        if (sessions.length === 0) {
+            log('❌ dialogueSessions 表为空！数据没有成功写入。', 'err');
+        } else {
+            sessions.forEach(s => {
+                log(`  ID:${s.id} | 主题:"${s.topic}" | 标题:"${s.title}" | 行数:${s.lineCount} | 创建:${s.createdAt}`, 'ok');
+            });
+        }
+
+        // Show dialogue lines
+        const lines = await db.dialogueLines.toArray();
+        log(`\n=== 对话行详情 (前5条) ===`);
+        lines.slice(0, 5).forEach(l => {
+            log(`  SessionID:${l.sessionId} | ${l.speaker}: ${l.content.slice(0, 50)}...`);
+        });
+
+        // Test orderBy
+        log('\n=== 测试 orderBy createdAt ===');
+        try {
+            const ordered = await db.dialogueSessions.orderBy('createdAt').reverse().toArray();
+            log(`✅ orderBy 成功，返回 ${ordered.length} 条`, 'ok');
+        } catch(e) {
+            log(`❌ orderBy 失败: ${e.message}`, 'err');
+        }
+
+        db.close();
+    } catch(e) {
+        log(`❌ 诊断出错: ${e.message}\n${e.stack}`, 'err');
+    }
+}
+
+async function testInsert() {
+    document.getElementById('output').innerHTML = '';
+    try {
+        const db = new Dexie('EnglishLearnDB');
+        db.version(1).stores({
+            sentences: '++id, createdAt',
+            dialogueSessions: '++id, createdAt',
+            dialogueLines: '++id, sessionId, speaker, order',
+            vocabulary: '++id, createdAt',
+            cardProgress: '++id, [type+itemId], type, itemId, nextReview'
+        });
+        db.version(2).stores({
+            sentences: '++id, createdAt, topic',
+            dialogueSessions: '++id, createdAt, topic',
+            dialogueLines: '++id, sessionId, speaker, order',
+            vocabulary: '++id, createdAt, topic',
+            cardProgress: '++id, [type+itemId], type, itemId, nextReview'
+        });
+        await db.open();
+
+        const now = new Date().toISOString();
+        const sessionId = await db.dialogueSessions.add({
+            title: 'Debug Test Session',
+            lineCount: 2,
+            topic: 'Debug Topic',
+            createdAt: now
+        });
+        log(`✅ 写入会话成功, ID: ${sessionId}`, 'ok');
+
+        await db.dialogueLines.bulkAdd([
+            { sessionId, speaker: 'User', content: 'Hello, how are you?', chinese: '你好，你怎么样？', order: 0, createdAt: now },
+            { sessionId, speaker: 'Coach', content: 'I am fine, thanks!', chinese: '我很好，谢谢！', order: 1, createdAt: now }
+        ]);
+        log(`✅ 写入对话行成功`, 'ok');
+
+        // Verify read back
+        const sessions = await db.dialogueSessions.orderBy('createdAt').reverse().toArray();
+        log(`✅ 读回 ${sessions.length} 个会话`, 'ok');
+        sessions.forEach(s => {
+            log(`  ID:${s.id} | "${s.topic}" | "${s.title}" | ${s.lineCount}行`);
+        });
+
+        log('\n现在请回到主页面的对话页面查看是否显示。', 'ok');
+        db.close();
+    } catch(e) {
+        log(`❌ 测试写入出错: ${e.message}\n${e.stack}`, 'err');
+    }
+}
+</script>
+</body>
+</html>

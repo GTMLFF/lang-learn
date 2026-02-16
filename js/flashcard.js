@@ -67,7 +67,7 @@ const Flashcard = {
         const currentTopic = topicSelect.value;
 
         // Preserve selection or default to ''
-        topicSelect.innerHTML = '<option value="">📌 全部主题</option>';
+        topicSelect.innerHTML = '<option value="">全部主题</option>';
         topics.forEach(t => {
             const option = document.createElement('option');
             option.value = t;
