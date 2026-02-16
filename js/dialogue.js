@@ -39,7 +39,11 @@ const Dialogue = {
     },
 
     async onPageShow() {
+        // Always reload sessions when page is shown (unless actively viewing a session)
         if (!this.currentSession) {
+            // Ensure session list view is visible
+            document.getElementById('session-list-view').classList.remove('hidden');
+            document.getElementById('dialogue-view').classList.add('hidden');
             await this.loadSessions();
         }
     },
